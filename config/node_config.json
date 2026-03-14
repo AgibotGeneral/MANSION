@@ -1,0 +1,13 @@
+{
+  "portable_program_and_cores": "openai",
+  "portable_generate_topology": "openai",
+  "portable_llm_growth": "openai",
+  "generate_doors": "azure",
+  "generate_windows": "azure",
+  "select_objects": "azure_gpt5",
+  "refine_objects": "azure_gpt5",
+  "refine_small_objects": "azure_gpt5",
+  "place_floor_objects": "azure_gpt5",
+  "place_wall_objects": "azure_gpt5",
+  "generate_small_objects": "azure_gpt5"
+}

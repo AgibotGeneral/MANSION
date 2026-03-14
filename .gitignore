@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data outputs
+data/scenes/*/
+!data/scenes/.gitkeep
+llm_planning_output/
+llm_planning_output_instances_output/
+llm_planning_output_instances_output1/
+
+# Patch assets (large files, download from HuggingFace)
+mansion_patch.zip
+mansion_patch/
+temp_patch/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AI assistant config
+CLAUDE.md
+.claude/

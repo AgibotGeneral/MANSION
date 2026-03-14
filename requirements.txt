@@ -1,0 +1,49 @@
+# Core AI/ML
+torch>=2.0.0
+torchvision
+transformers
+sentence-transformers
+openai
+langchain-openai
+langgraph
+
+# AI2-THOR and 3D Assets
+procthor
+objathor
+objaverse
+
+# Geometry and Optimization
+shapely
+rtree
+trimesh
+cvxpy
+
+# Image and Video Processing
+opencv-python
+pillow<11.0.0
+moviepy
+imageio
+matplotlib
+
+# Utilities
+numpy<2.0.0
+scipy
+tqdm
+loguru
+compress-json
+compress-pickle
+open-clip-torch
+psutil
+python-dotenv
+pydantic>=2.0.0,<2.10.0
+importlib-metadata
+editdistance
+
+# Optional: Web Tools
+flask<3.1.0
+werkzeug<3.1.0
+requests
+
+# Terminal and Utilities
+attrs
+colorama
