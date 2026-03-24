@@ -76,8 +76,8 @@ AZURE_CONFIG = {
 # node_config.json entries in mixed mode.
 AZURE_GPT5_CONFIG = {
     "provider": "azure",
-    "deployment": os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT5", os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5")),
-    "model": os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT5", os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5")),
+    "deployment": os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT5", os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5.4")),
+    "model": os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT5", os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5.4")),
     "api_key": os.getenv("AZURE_OPENAI_API_KEY"),
     "endpoint": os.getenv("AZURE_OPENAI_ENDPOINT"),
     "api_version": os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-01-preview"),

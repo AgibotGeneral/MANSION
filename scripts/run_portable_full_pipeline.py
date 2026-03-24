@@ -45,7 +45,13 @@ def _wrap_node(stage: str):
     node_fn = NODE_REGISTRY[stage]
 
     def _fn(state: GraphState) -> GraphState:
+        import traceback as _tb
         pipeline_state = state["pipeline"]
+
+        # Record node start
+        trace = pipeline_state.portable.setdefault("node_trace", [])
+        entry: Dict[str, Any] = {"node": stage, "started_at": time.strftime("%H:%M:%S"), "status": "running"}
+        trace.append(entry)
 
         if pipeline_state.resources.mansion:
             from mansion.llm.openai_wrapper import OpenAIWrapper
@@ -65,14 +71,29 @@ def _wrap_node(stage: str):
                     except Exception:
                         pass
                 if stage not in node_map:
-                    return {"pipeline": node_fn(pipeline_state)}
+                    try:
+                        result = node_fn(pipeline_state)
+                        entry["status"] = "ok"
+                        return {"pipeline": result}
+                    except Exception as exc:
+                        entry["status"] = "error"
+                        entry["error"] = str(exc)
+                        entry["traceback"] = _tb.format_exc()
+                        raise
                 node_llm = OpenAIWrapper(node_name=stage)
 
             pipeline_state.resources.mansion.update_llm(node_llm)
             pipeline_state.resources.llm = node_llm
 
-        updated = node_fn(pipeline_state)
-        return {"pipeline": updated}
+        try:
+            updated = node_fn(pipeline_state)
+            entry["status"] = "ok"
+            return {"pipeline": updated}
+        except Exception as exc:
+            entry["status"] = "error"
+            entry["error"] = str(exc)
+            entry["traceback"] = _tb.format_exc()
+            raise
 
     _fn.__name__ = stage
     return _fn
@@ -550,6 +571,26 @@ def _clean_and_finalize_outputs(
         else:
             print(f"[clean] ⚠️  floor {fid}: no final PNG found")
 
+    # Copy diagnostic files only for failed floors; discard on full success
+    failed_fids = {int(fid) for fid, info in results.items() if info.get("error")}
+    for fid_str in sorted(results.keys(), key=int):
+        fid = int(fid_str)
+        src_diag = root_run_dir / f"floor_{fid}" / "diagnostic.json"
+        if not src_diag.exists() or fid not in failed_fids:
+            continue
+        dst_diag = root_run_dir / f"floor_{fid}_diagnostic.json"
+        try:
+            shutil.copy2(src_diag, dst_diag)
+            kept_files.append(dst_diag)
+            print(f"[clean] floor {fid}: saved diagnostic → {dst_diag.name}")
+        except Exception as exc:
+            print(f"[clean] ⚠️  floor {fid}: could not copy diagnostic ({exc})")
+
+    # Keep run_summary.json only when there were failures
+    run_summary = root_run_dir / "run_summary.json"
+    if run_summary.exists() and failed_fids:
+        kept_files.append(run_summary)
+
     kept_names = {p.name for p in kept_files}
 
     for entry in sorted(root_run_dir.iterdir()):
@@ -770,8 +811,33 @@ def _run_floor(
     scenes_dir = Path(root_run_dir) / f"floor_{floor_id}" / "scenes"
     initial_state.scene["debug_artifacts_dir"] = str(scenes_dir)
 
-    res = app.invoke({"pipeline": initial_state}, config={"recursion_limit": int(local_cfg.recursion_limit)})
-    
+    floor_dir = Path(root_run_dir) / f"floor_{floor_id}"
+    floor_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        res = app.invoke({"pipeline": initial_state}, config={"recursion_limit": int(local_cfg.recursion_limit)})
+    except Exception as invoke_exc:
+        import traceback as _tb
+        node_trace = initial_state.portable.get("node_trace", [])
+        failed_node = next((e for e in reversed(node_trace) if e.get("status") == "error"), None)
+        diag = {
+            "floor_id": floor_id,
+            "status": "error",
+            "error_type": type(invoke_exc).__name__,
+            "error": str(invoke_exc),
+            "traceback": _tb.format_exc(),
+            "failed_node": failed_node.get("node") if failed_node else "unknown",
+            "node_trace": node_trace,
+        }
+        diag_path = floor_dir / "diagnostic.json"
+        try:
+            with open(diag_path, "w", encoding="utf-8") as _f:
+                json.dump(diag, _f, ensure_ascii=False, indent=2)
+            print(f"[floor {floor_id}] diagnostic saved → {diag_path}")
+        except Exception:
+            pass
+        raise
+
     # --- Extract object lifecycle statistics ---
     final_pipeline = res["pipeline"]
     scene = final_pipeline.scene
@@ -822,7 +888,24 @@ def _run_floor(
         "placed": placed_count,
         "placed_details": placed_details
     }
-    
+
+    # Write diagnostic file for successful floors
+    node_trace = final_pipeline.portable.get("node_trace", [])
+    diag = {
+        "floor_id": floor_id,
+        "status": "ok",
+        "node_trace": node_trace,
+        "object_stats": {"selected": selected_count, "placed": placed_count},
+        "final_json": result_data.get("final_json"),
+        "final_png": result_data.get("final_png"),
+    }
+    diag_path = floor_dir / "diagnostic.json"
+    try:
+        with open(diag_path, "w", encoding="utf-8") as _f:
+            json.dump(diag, _f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
     return result_data
 
 
@@ -947,6 +1030,30 @@ def run_full_pipeline(cfg: PipelineConfig, run_name_override: Optional[str] = No
             f"final_json={info.get('final_json')}, "
             f"final_png={info.get('final_png')}"
         )
+
+    # Write run_summary.json before any cleanup (always kept)
+    summary = {
+        "requirement": cfg.portable_requirement or cfg.query,
+        "floors": cfg.portable_floors,
+        "completed_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "floors_status": {
+            fid: {
+                "status": "error" if info.get("error") else "ok",
+                "error_type": info.get("error_type"),
+                "error": info.get("error"),
+                "final_json": info.get("final_json"),
+                "final_png": info.get("final_png"),
+            }
+            for fid, info in results.items()
+        },
+    }
+    summary_path = root_run_dir / "run_summary.json"
+    try:
+        with open(summary_path, "w", encoding="utf-8") as _f:
+            json.dump(summary, _f, ensure_ascii=False, indent=2)
+        print(f"[full-pipeline] run_summary saved → {summary_path}")
+    except Exception as _exc:
+        print(f"[full-pipeline] ⚠️  could not write run_summary: {_exc}")
 
     if cfg.clean_output:
         print("\n[full-pipeline] Cleaning intermediate files …")

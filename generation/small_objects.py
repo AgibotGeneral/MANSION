@@ -392,7 +392,11 @@ class SmallObjectGenerator:
                 candidate
                 for candidate in candidates
                 if get_annotations(self.database[candidate[0]])["onObject"] == True
-            ]  # Only select objects that can be placed on other objects
+                and not candidate[0].startswith("RoboTHOR_")
+            ]  # Only select objects that can be placed on other objects.
+            # RoboTHOR_ assets are RoboTHOR scene prefabs embedded in the Unity
+            # binary; they are NOT procedural assets and cannot be dynamically
+            # spawned via SpawnAsset, causing silent placement failure.
 
             valid_candidates = []  # Only select objects with high confidence
 
@@ -520,6 +524,10 @@ class SmallObjectGenerator:
             spawn_time = time.time() - start_time
             if spawn_time > 5:
                 print(f"      ⚠️  SpawnAsset took {spawn_time:.1f}s")
+
+            if not event.metadata.get("lastActionSuccess"):
+                print(f"      ⚠️  SpawnAsset failed for {object_id}: {event.metadata.get('errorMessage','')}")
+                return None
 
             # Place the object in the receptacle
             # Question: Can I spawn multiple objects at once?

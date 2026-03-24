@@ -102,9 +102,27 @@ python mansion_quickstart.py
 
 
 
-## Mansion API
+## MansionWorld
 
-We provide a hosted API for generating multi-floor building scenes without local setup. Full usage instructions, endpoints, and examples are available on the project page:
+**MansionWorld** is our dataset of 1,000 pre-generated multi-floor buildings. You can download it directly from HuggingFace without running the full MANSION generation pipeline:
+
+> **https://huggingface.co/datasets/superbigsaw/MansionWorld**
+
+## Mansion Gym
+
+**Mansion Gym** (`mansion-api`) is a gymnasium-compatible environment built on top of MansionWorld, providing cross-floor embodied AI capabilities — navigation, object interaction, and long-horizon task execution across multiple floors.
+
+### Installation
+
+```bash
+pip install mansion-api
+```
+
+### Quick Start
+
+If you haven't set up the full MANSION pipeline yet, download the MansionWorld dataset from HuggingFace and open [`mansionworld_quickstart.ipynb`](mansionworld_quickstart.ipynb) to explore the key skills and interfaces provided by Mansion Gym.
+
+For full API documentation, see the project page:
 
 > **https://agibotgeneral.github.io/mansion-site/**
 
@@ -125,6 +143,10 @@ If you find this work useful, please cite our paper:
 }
 ```
 
+
+## Acknowledgements
+
+This repository includes code adapted from [Holodeck](https://github.com/allenai/Holodeck) (allenai/Holodeck), licensed under Apache-2.0. We modified the original implementation for scene instantiation and object placement. See the LICENSE file and third-party notices for attribution details.
 
 ## License
 

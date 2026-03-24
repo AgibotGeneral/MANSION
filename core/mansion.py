@@ -1,6 +1,11 @@
 import datetime
 import os
+import threading
 from typing import Optional, Dict, Any, Tuple
+
+if os.environ.get("HF_HUB_OFFLINE") != "0":
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 import compress_json
 import open_clip
@@ -36,6 +41,33 @@ from mansion.generation.walls import WallGenerator
 from mansion.generation.windows import WindowGenerator
 
 
+# Module-level singletons for heavy models shared across all Mansion instances.
+# Guards against accelerate's global meta-device patch racing between threads.
+_MODEL_LOCK = threading.Lock()
+_clip_model = None
+_clip_preprocess = None
+_clip_tokenizer = None
+_sbert_model = None
+
+
+def _load_shared_models():
+    """Load CLIP and SBERT once; subsequent calls return the cached instances."""
+    global _clip_model, _clip_preprocess, _clip_tokenizer, _sbert_model
+    with _MODEL_LOCK:
+        if _clip_model is None:
+            (
+                _clip_model,
+                _,
+                _clip_preprocess,
+            ) = open_clip.create_model_and_transforms(
+                "ViT-L-14", pretrained="laion2b_s32b_b82k"
+            )
+            _clip_tokenizer = open_clip.get_tokenizer("ViT-L-14")
+        if _sbert_model is None:
+            _sbert_model = SentenceTransformer("all-mpnet-base-v2", device="cpu")
+    return _clip_model, _clip_preprocess, _clip_tokenizer, _sbert_model
+
+
 def confirm_paths_exist():
     for p in [
         OBJATHOR_VERSIONED_DIR,
@@ -69,10 +101,6 @@ class Mansion:
         if openai_org is not None:
             os.environ["OPENAI_ORG"] = openai_org
 
-        # Force offline mode for HuggingFace-based models (CLIP, SBERT)
-        # to skip version checks and speed up initialization.
-        os.environ["HF_HUB_OFFLINE"] = "1"
-
         # Initialize LLM using the unified wrapper
         # The wrapper now handles constants.py and env vars internally.
         self.llm = OpenAIWrapper(
@@ -82,18 +110,13 @@ class Mansion:
         )
         print(f"✅ LLM initialized: {self.llm}")
 
-        # initialize CLIP
+        # initialize CLIP and sentence transformer (shared singletons, thread-safe)
         (
             self.clip_model,
-            _,
             self.clip_preprocess,
-        ) = open_clip.create_model_and_transforms(
-            "ViT-L-14", pretrained="laion2b_s32b_b82k"
-        )
-        self.clip_tokenizer = open_clip.get_tokenizer("ViT-L-14")
-
-        # initialize sentence transformer
-        self.sbert_model = SentenceTransformer("all-mpnet-base-v2", device="cpu")
+            self.clip_tokenizer,
+            self.sbert_model,
+        ) = _load_shared_models()
 
         # objaverse version and asset dir
         self.objaverse_asset_dir = objaverse_asset_dir
